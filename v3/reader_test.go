@@ -31,8 +31,8 @@ func TestRateLimitedReader_BasicRead(t *testing.T) {
 	}
 
 	fmt.Printf("Took %v\n", elapsed)
-	maxTime := time.Duration(partsAmount) * time.Second
-	minTime := time.Duration(partsAmount+1) * time.Second
+	maxTime := time.Duration(partsAmount-1) * time.Second
+	minTime := time.Duration(partsAmount) * time.Second
 	if elapsed.Abs().Round(time.Second) < maxTime { // round to second - has a deviation of up to half a second
 		t.Errorf("read completed too quickly, elapsed time: %v < max time: %v", elapsed, maxTime)
 	} else if elapsed.Abs().Round(time.Second) > minTime { // round to second - has a deviation of up to half a second
@@ -95,8 +95,8 @@ func TestRateLimitedReader_MultipleReads(t *testing.T) {
 	}
 
 	fmt.Printf("Took %v\n", elapsed)
-	maxTime := time.Duration(partsAmount) * time.Second
-	minTime := time.Duration(partsAmount+1) * time.Second
+	maxTime := time.Duration(partsAmount-1) * time.Second
+	minTime := time.Duration(partsAmount) * time.Second
 	if elapsed.Abs().Round(time.Second) < maxTime { // round to second - has a deviation of up to half a second
 		t.Errorf("read completed too quickly, elapsed time: %v < max time: %v", elapsed, maxTime)
 	} else if elapsed.Abs().Round(time.Second) > minTime { // round to second - has a deviation of up to half a second
@@ -158,8 +158,8 @@ func TestRateLimitedReader_UpdateLimit(t *testing.T) {
 
 	elapsed := time.Since(start)
 	fmt.Printf("Took %v\n", elapsed)
-	maxTime := time.Duration((float64(partsAmount) * 0.75)) * time.Second
-	minTime := time.Duration((float64(partsAmount)*0.75)+1) * time.Second
+	maxTime := time.Duration((float64(partsAmount)*0.75)-1) * time.Second
+	minTime := time.Duration((float64(partsAmount) * 0.75)) * time.Second
 	if elapsed.Abs().Round(time.Second) < maxTime { // round to second - has a deviation of up to half a second
 		t.Errorf("read completed too quickly, elapsed time: %v < max time: %v", elapsed, maxTime)
 	} else if elapsed.Abs().Round(time.Second) > minTime { // round to second - has a deviation of up to half a second

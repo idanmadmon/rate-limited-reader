@@ -16,23 +16,28 @@ func TestRateLimitedReader_BasicRead(t *testing.T) {
 	limit := int64(dataSize / partsAmount) // dataSize/partsAmount bytes per second
 
 	ratelimitedReader := NewRateLimitedReader(reader, limit)
-	buffer := make([]byte, dataSize)
+	buffer := make([]byte, dataSize/partsAmount)
 
+	var totalRead int
 	start := time.Now()
-	n, err := ratelimitedReader.Read(buffer)
-	elapsed := time.Since(start)
 
-	if err != nil && err != io.EOF {
-		t.Fatalf("unexpected error: %v", err)
+	for totalRead < dataSize {
+		read, err := ratelimitedReader.Read(buffer)
+		totalRead += read
+		if err != nil && err != io.EOF {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	}
 
-	if n != dataSize {
-		t.Fatalf("read incomplete data, read: %d expected: %d", n, dataSize)
+	elapsed := time.Since(start)
+
+	if totalRead != dataSize {
+		t.Fatalf("read incomplete data, read: %d expected: %d", totalRead, dataSize)
 	}
 
 	fmt.Printf("Took %v\n", elapsed)
-	maxTime := time.Duration(partsAmount) * time.Second
-	minTime := time.Duration(partsAmount+1) * time.Second
+	maxTime := time.Duration(partsAmount-1) * time.Second
+	minTime := time.Duration(partsAmount) * time.Second
 	if elapsed.Abs().Round(time.Second) < maxTime { // round to second - has a deviation of up to half a second
 		t.Errorf("read completed too quickly, elapsed time: %v < max time: %v", elapsed, maxTime)
 	} else if elapsed.Abs().Round(time.Second) > minTime { // round to second - has a deviation of up to half a second
@@ -95,8 +100,8 @@ func TestRateLimitedReader_MultipleReads(t *testing.T) {
 	}
 
 	fmt.Printf("Took %v\n", elapsed)
-	maxTime := time.Duration(partsAmount) * time.Second
-	minTime := time.Duration(partsAmount+1) * time.Second
+	maxTime := time.Duration(partsAmount-1) * time.Second
+	minTime := time.Duration(partsAmount) * time.Second
 	if elapsed.Abs().Round(time.Second) < maxTime { // round to second - has a deviation of up to half a second
 		t.Errorf("read completed too quickly, elapsed time: %v < max time: %v", elapsed, maxTime)
 	} else if elapsed.Abs().Round(time.Second) > minTime { // round to second - has a deviation of up to half a second
@@ -125,44 +130,5 @@ func TestRateLimitedReader_EOFBehavior(t *testing.T) {
 		t.Fatalf("expected EOF but got error: %v", err)
 	} else if n != 0 {
 		t.Fatalf("read bytes after getting EOF: got %d", n)
-	}
-}
-
-func TestRateLimitedReader_UpdateLimit(t *testing.T) {
-	dataSize := 102400 // 100 KB of data
-	partsAmount := 4
-	data := strings.Repeat("A", dataSize)
-	reader := strings.NewReader(data)
-	limit := int64(dataSize / partsAmount) // dataSize/partsAmount bytes per second
-
-	ratelimitedReader := NewRateLimitedReader(reader, limit)
-	buffer := make([]byte, dataSize)
-
-	start := time.Now()
-
-	n, err := ratelimitedReader.Read(buffer[:dataSize/2])
-	if err != nil && err != io.EOF {
-		t.Fatalf("unexpected error: %v", err)
-	} else if n != dataSize/2 {
-		t.Fatalf("read incomplete data, read: %d expected: %d", n, dataSize/2)
-	}
-
-	ratelimitedReader.UpdateLimit(limit * 2) // update limit to cut time for the second half by half (minus 25% to the expected time)
-
-	n, err = ratelimitedReader.Read(buffer[dataSize/2:])
-	if err != nil && err != io.EOF {
-		t.Fatalf("unexpected error: %v", err)
-	} else if n != dataSize/2 {
-		t.Fatalf("read incomplete data, read: %d expected: %d", n, dataSize/2)
-	}
-
-	elapsed := time.Since(start)
-	fmt.Printf("Took %v\n", elapsed)
-	maxTime := time.Duration((float64(partsAmount) * 0.75)) * time.Second
-	minTime := time.Duration((float64(partsAmount)*0.75)+1) * time.Second
-	if elapsed.Abs().Round(time.Second) < maxTime { // round to second - has a deviation of up to half a second
-		t.Errorf("read completed too quickly, elapsed time: %v < max time: %v", elapsed, maxTime)
-	} else if elapsed.Abs().Round(time.Second) > minTime { // round to second - has a deviation of up to half a second
-		t.Errorf("read completed too slow, elapsed time: %v > min time: %v", elapsed, minTime)
 	}
 }

@@ -2,7 +2,12 @@ package rateLimitedReader
 
 import (
 	"io"
+	"sync/atomic"
 	"time"
+)
+
+const (
+	intervalReadTimeMilli = 50
 )
 
 type RateLimitedReader struct {
@@ -23,7 +28,11 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 	chunkSize := int64(len(p))
 
 	for totalRead < chunkSize {
-		limit := r.limit
+		limit := atomic.LoadInt64(&r.limit)
+
+		// the limit set to per second
+		limit = limit / (1000 / intervalReadTimeMilli)
+
 		if limit == 0 {
 			limit = chunkSize
 		}
@@ -31,10 +40,10 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 		allowedBytes := limit
 
 		if chunkSize-totalRead < allowedBytes {
-			allowedBytes = chunkSize - int64(totalRead)
+			allowedBytes = chunkSize - totalRead
 		}
 
-		expectedTime := time.Duration(allowedBytes * int64(time.Second) / limit)
+		expectedTime := time.Duration(allowedBytes * int64(intervalReadTimeMilli*time.Millisecond) / limit)
 		elapsed := time.Since(r.lastRead)
 
 		if elapsed < expectedTime {
@@ -57,4 +66,8 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 	}
 
 	return int(totalRead), nil
+}
+
+func (r *RateLimitedReader) UpdateLimit(newLimit int64) {
+	atomic.StoreInt64(&r.limit, newLimit)
 }

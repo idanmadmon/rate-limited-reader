@@ -20,24 +20,27 @@ func NewRateLimitedReader(r io.Reader, limit int64) *RateLimitedReader {
 
 func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 	chunkSize := int64(len(p))
-	allowedBytes := r.limit
+
+	limit := r.limit
+	if limit == 0 {
+		limit = chunkSize
+	}
+
+	allowedBytes := limit
 
 	if chunkSize > allowedBytes {
 		p = p[:allowedBytes]
 	}
 
-	expectedTime := time.Duration(chunkSize * int64(time.Second) / r.limit)
+	expectedTime := time.Duration(chunkSize * int64(time.Second) / limit)
 	elapsed := time.Since(r.lastRead)
 
 	if elapsed < expectedTime {
 		time.Sleep(expectedTime - elapsed)
 	}
 
+	r.lastRead = time.Now()
 	n, err = r.reader.Read(p)
-
-	if n > 0 {
-		r.lastRead = time.Now()
-	}
 
 	return n, err
 }

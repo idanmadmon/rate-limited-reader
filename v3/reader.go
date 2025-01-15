@@ -25,6 +25,11 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 
 	for totalRead < chunkSize {
 		limit := atomic.LoadInt64(&r.limit)
+
+		if limit == 0 {
+			limit = chunkSize
+		}
+
 		allowedBytes := limit
 
 		if chunkSize-totalRead < allowedBytes {
@@ -38,16 +43,19 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 			time.Sleep(expectedTime - elapsed)
 		}
 
+		r.lastRead = time.Now()
 		n, err = r.reader.Read(p[totalRead:int(totalRead+allowedBytes)])
 		if err != nil {
 			if err == io.EOF {
+				if totalRead == 0 {
+					return 0, err
+				}
 				return int(totalRead), nil
 			}
 			return int(totalRead), err
 		}
 
 		totalRead += int64(n)
-		r.lastRead = time.Now()
 	}
 
 	return int(totalRead), nil
