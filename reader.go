@@ -11,12 +11,19 @@ const (
 )
 
 type RateLimitedReader struct {
-	reader   io.Reader
+	reader   io.ReadCloser
 	limit    int64
 	lastRead time.Time
 }
 
 func NewRateLimitedReader(r io.Reader, limit int64) *RateLimitedReader {
+	return &RateLimitedReader{
+		reader: io.NopCloser(r),
+		limit:  limit,
+	}
+}
+
+func NewRateLimitedReadCloser(r io.ReadCloser, limit int64) *RateLimitedReader {
 	return &RateLimitedReader{
 		reader: r,
 		limit:  limit,
@@ -66,6 +73,10 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 	}
 
 	return int(totalRead), nil
+}
+
+func (r *RateLimitedReader) Close() error {
+	return r.reader.Close()
 }
 
 func (r *RateLimitedReader) UpdateLimit(newLimit int64) {
