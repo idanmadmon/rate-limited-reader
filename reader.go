@@ -11,9 +11,10 @@ const (
 )
 
 type RateLimitedReader struct {
-	reader   io.ReadCloser
-	limit    int64
-	lastRead time.Time
+	reader    io.ReadCloser
+	limit     int64
+	lastRead  time.Time
+	totalRead int64
 }
 
 func NewRateLimitedReader(r io.Reader, limit int64) *RateLimitedReader {
@@ -32,9 +33,11 @@ func NewRateLimitedReadCloser(r io.ReadCloser, limit int64) *RateLimitedReader {
 
 func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 	var totalRead int64
+	atomic.StoreInt64(&r.totalRead, totalRead)
 	chunkSize := int64(len(p))
 
 	for totalRead < chunkSize {
+		totalRead = atomic.LoadInt64(&r.totalRead)
 		limit := atomic.LoadInt64(&r.limit)
 
 		// the limit set to per second
@@ -69,10 +72,10 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 			return int(totalRead), err
 		}
 
-		totalRead += int64(n)
+		atomic.AddInt64(&r.totalRead, int64(n))
 	}
 
-	return int(totalRead), nil
+	return int(atomic.LoadInt64(&r.totalRead)), nil
 }
 
 func (r *RateLimitedReader) Close() error {
@@ -81,4 +84,8 @@ func (r *RateLimitedReader) Close() error {
 
 func (r *RateLimitedReader) UpdateLimit(newLimit int64) {
 	atomic.StoreInt64(&r.limit, newLimit)
+}
+
+func (r *RateLimitedReader) GetCurrentTotalRead() int64 {
+	return atomic.LoadInt64(&r.totalRead)
 }

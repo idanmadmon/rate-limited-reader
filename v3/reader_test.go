@@ -166,3 +166,69 @@ func TestRateLimitedReader_UpdateLimit(t *testing.T) {
 		t.Errorf("read completed too slow, elapsed time: %v > min time: %v", elapsed, minTime)
 	}
 }
+
+func TestRateLimitedReader_GetCurrentTotalRead(t *testing.T) {
+	dataSize := 102400 // 100 KB of data
+	partsAmount := 3
+	data := strings.Repeat("A", dataSize)
+	reader := strings.NewReader(data)
+	limit := int64(dataSize / partsAmount) // dataSize/partsAmount bytes per second
+
+	ratelimitedReader := NewRateLimitedReader(reader, limit)
+	buffer := make([]byte, dataSize)
+
+	go func() {
+		time.Sleep(time.Second / 2)
+		for i := 0; i < partsAmount; i++ {
+			currentTotalRead := ratelimitedReader.GetCurrentTotalRead()
+			fmt.Printf("Total Read: %d , limit: %d\n", currentTotalRead, limit)
+			if currentTotalRead != limit*int64(i+1) {
+				t.Fatalf("got unexpected CurrentTotalRead, read: %d expected: %d", currentTotalRead, limit*int64(i+1))
+			}
+			time.Sleep(time.Second)
+		}
+	}()
+
+	start := time.Now()
+	n, err := ratelimitedReader.Read(buffer)
+	elapsed := time.Since(start)
+
+	if err != nil && err != io.EOF {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if n != dataSize {
+		t.Fatalf("read incomplete data, read: %d expected: %d", n, dataSize)
+	}
+
+	fmt.Printf("Took %v\n", elapsed)
+	maxTime := time.Duration(partsAmount-1) * time.Second
+	minTime := time.Duration(partsAmount) * time.Second
+	if elapsed.Abs().Round(time.Second) < maxTime { // round to second - has a deviation of up to half a second
+		t.Errorf("read completed too quickly, elapsed time: %v < max time: %v", elapsed, maxTime)
+	} else if elapsed.Abs().Round(time.Second) > minTime { // round to second - has a deviation of up to half a second
+		t.Errorf("read completed too slow, elapsed time: %v > min time: %v", elapsed, minTime)
+	}
+}
+
+type mockReadCloser struct {
+	closed bool
+}
+
+func (m *mockReadCloser) Read(p []byte) (n int, err error) {
+	return 0, io.EOF
+}
+
+func (m *mockReadCloser) Close() error {
+	m.closed = true
+	return nil
+}
+
+func TestRateLimitedReadCloser_Close(t *testing.T) {
+	readCloser := mockReadCloser{}
+	ratelimitedReadCloser := NewRateLimitedReadCloser(&readCloser, 0)
+	ratelimitedReadCloser.Close()
+	if readCloser.closed == false {
+		t.Fatalf("expected readCloser to be closed but wasn't")
+	}
+}

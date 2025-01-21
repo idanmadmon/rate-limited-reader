@@ -7,12 +7,20 @@ import (
 )
 
 type RateLimitedReader struct {
-	reader   io.Reader
-	limit    int64
-	lastRead time.Time
+	reader    io.ReadCloser
+	limit     int64
+	lastRead  time.Time
+	totalRead int64
 }
 
 func NewRateLimitedReader(r io.Reader, limit int64) *RateLimitedReader {
+	return &RateLimitedReader{
+		reader: io.NopCloser(r),
+		limit:  limit,
+	}
+}
+
+func NewRateLimitedReadCloser(r io.ReadCloser, limit int64) *RateLimitedReader {
 	return &RateLimitedReader{
 		reader: r,
 		limit:  limit,
@@ -21,9 +29,11 @@ func NewRateLimitedReader(r io.Reader, limit int64) *RateLimitedReader {
 
 func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 	var totalRead int64
+	atomic.StoreInt64(&r.totalRead, totalRead)
 	chunkSize := int64(len(p))
 
 	for totalRead < chunkSize {
+		totalRead = atomic.LoadInt64(&r.totalRead)
 		limit := atomic.LoadInt64(&r.limit)
 
 		if limit == 0 {
@@ -33,7 +43,7 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 		allowedBytes := limit
 
 		if chunkSize-totalRead < allowedBytes {
-			allowedBytes = chunkSize - int64(totalRead)
+			allowedBytes = chunkSize - totalRead
 		}
 
 		expectedTime := time.Duration(allowedBytes * int64(time.Second) / limit)
@@ -55,12 +65,20 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 			return int(totalRead), err
 		}
 
-		totalRead += int64(n)
+		atomic.AddInt64(&r.totalRead, int64(n))
 	}
 
-	return int(totalRead), nil
+	return int(atomic.LoadInt64(&r.totalRead)), nil
+}
+
+func (r *RateLimitedReader) Close() error {
+	return r.reader.Close()
 }
 
 func (r *RateLimitedReader) UpdateLimit(newLimit int64) {
 	atomic.StoreInt64(&r.limit, newLimit)
+}
+
+func (r *RateLimitedReader) GetCurrentTotalRead() int64 {
+	return atomic.LoadInt64(&r.totalRead)
 }
