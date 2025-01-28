@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-const (
-	intervalReadTimeMilli = 50
+var (
+	ReadIntervalMilliseconds int64 = 50
 )
 
 type RateLimitedReader struct {
@@ -41,7 +41,7 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 		limit := atomic.LoadInt64(&r.limit)
 
 		// the limit set to per second
-		limit = limit / (1000 / intervalReadTimeMilli)
+		limit = limit / (1000 / ReadIntervalMilliseconds)
 
 		if limit == 0 {
 			limit = chunkSize
@@ -53,7 +53,7 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 			allowedBytes = chunkSize - totalRead
 		}
 
-		expectedTime := time.Duration(allowedBytes * int64(intervalReadTimeMilli*time.Millisecond) / limit)
+		expectedTime := time.Duration(allowedBytes * ReadIntervalMilliseconds * int64(time.Millisecond) / limit)
 		elapsed := time.Since(r.lastRead)
 
 		if elapsed < expectedTime {

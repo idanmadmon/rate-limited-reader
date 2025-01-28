@@ -178,7 +178,7 @@ func TestRateLimitedReader_GetCurrentTotalRead(t *testing.T) {
 	buffer := make([]byte, dataSize)
 
 	go func() {
-		limitAbs := int64(limit/(1000/intervalReadTimeMilli)) * (1000 / intervalReadTimeMilli)
+		limitAbs := int64(limit/(1000/ReadIntervalMilliseconds)) * (1000 / ReadIntervalMilliseconds)
 		for i := 0; i < partsAmount; i++ {
 			select {
 			case <-time.After(time.Second):
