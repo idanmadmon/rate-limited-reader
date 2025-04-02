@@ -213,6 +213,38 @@ func TestRateLimitedReader_GetCurrentTotalRead(t *testing.T) {
 	}
 }
 
+func TestRateLimitedReader_UnconventionalLimitRead(t *testing.T) {
+	dataSize := 102400 // 100 KB of data
+	partsAmount := 1
+	data := strings.Repeat("A", dataSize)
+	reader := strings.NewReader(data)
+	limit := int64(dataSize - 10000) // dataSize/partsAmount bytes per second
+
+	ratelimitedReader := NewRateLimitedReader(reader, limit)
+	buffer := make([]byte, dataSize)
+
+	start := time.Now()
+	n, err := ratelimitedReader.Read(buffer)
+	elapsed := time.Since(start)
+
+	if err != nil && err != io.EOF {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if n != dataSize {
+		t.Fatalf("read incomplete data, read: %d expected: %d", n, dataSize)
+	}
+
+	fmt.Printf("Took %v\n", elapsed)
+	maxTime := time.Duration(partsAmount) * time.Second
+	minTime := time.Duration(partsAmount+1) * time.Second
+	if elapsed.Abs().Round(time.Second) < maxTime { // round to second - has a deviation of up to half a second
+		t.Errorf("read completed too quickly, elapsed time: %v < max time: %v", elapsed, maxTime)
+	} else if elapsed.Abs().Round(time.Second) > minTime { // round to second - has a deviation of up to half a second
+		t.Errorf("read completed too slow, elapsed time: %v > min time: %v", elapsed, minTime)
+	}
+}
+
 type mockReadCloser struct {
 	closed bool
 }
