@@ -169,7 +169,7 @@ func TestRateLimitedReader_UpdateLimit(t *testing.T) {
 
 func TestRateLimitedReader_GetCurrentTotalRead(t *testing.T) {
 	dataSize := 102400 // 100 KB of data
-	partsAmount := 3
+	partsAmount := 4
 	data := strings.Repeat("A", dataSize)
 	reader := strings.NewReader(data)
 	limit := int64(dataSize / partsAmount) // dataSize/partsAmount bytes per second
