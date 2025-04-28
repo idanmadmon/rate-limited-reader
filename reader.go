@@ -33,6 +33,7 @@ func NewRateLimitedReadCloser(r io.ReadCloser, limit int64) *RateLimitedReader {
 
 func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 	var totalRead int64
+	var delayFactor int64
 	atomic.StoreInt64(&r.totalRead, totalRead)
 	chunkSize := int64(len(p))
 
@@ -42,8 +43,11 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 		// the limit set to per second
 		limit = limit / (1000 / ReadIntervalMilliseconds)
 
-		if limit == 0 {
+		if limit <= 0 {
 			limit = chunkSize
+			delayFactor = 0
+		} else {
+			delayFactor = 1
 		}
 
 		allowedBytes := limit
@@ -52,7 +56,7 @@ func (r *RateLimitedReader) Read(p []byte) (n int, err error) {
 			allowedBytes = chunkSize - totalRead
 		}
 
-		expectedTime := time.Duration(allowedBytes * ReadIntervalMilliseconds * int64(time.Millisecond) / limit)
+		expectedTime := time.Duration(delayFactor * allowedBytes * ReadIntervalMilliseconds * int64(time.Millisecond) / limit)
 		elapsed := time.Since(r.lastRead)
 
 		if elapsed < expectedTime {
