@@ -52,29 +52,40 @@ go get github.com/idanmadmon/rate-limited-reader
 package main
 
 import (
-    "os"
-    "github.com/idanmadmon/rate-limited-reader"
+	"bytes"
+	"fmt"
+	"io"
+	"time"
+
+	ratelimitedreader "github.com/idanmadmon/rate-limited-reader"
 )
 
 func main() {
-    file, _ := os.Open("big_video.mp4")
+	const dataSize = 32 * 1024
+	reader := bytes.NewBuffer(make([]byte, dataSize))
 
-    // Limit to 1 Megabyte/sec
-    r := ratelimitedreader.New(file, ratelimitedreader.Config{
-        RateBytesPerSec: 1024 * 1024,
-    })
+	// allow 1/4 of the data size per second,
+	// should take 32 / (32/4) = 4 seconds
+	// reads interval divided evenly by
+	// ratelimitedreader.ReadIntervalMilliseconds
+	limitedReader := ratelimitedreader.NewRateLimitedReader(reader, dataSize/4)
 
-    // use `r` as any io.Reader
-    buf := make([]byte, 4096)
-    for {
-        n, err := r.Read(buf)
-        if n > 0 {
-            // do something with buf[:n]
-        }
-        if err != nil {
-            break
-        }
-    }
+	var total int
+	buffer := make([]byte, 1024)
+	start := time.Now()
+	for {
+		n, err := limitedReader.Read(buffer)
+		total += n
+		if err != nil {
+			if err != io.EOF {
+				fmt.Printf("Error: %v\n", err)
+			}
+			break
+		}
+	}
+
+	elapsed := time.Since(start)
+	fmt.Printf("Total: %d, Elapsed: %s\n", total, elapsed)
 }
 ```
 
