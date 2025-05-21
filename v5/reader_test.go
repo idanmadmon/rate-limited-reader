@@ -174,6 +174,48 @@ func TestRateLimitedReadCloser_Close(t *testing.T) {
 	}
 }
 
+func TestRateLimitedReader_ReadPerformence(t *testing.T) {
+	const durationInSeconds = 10
+	const bufferSize = 32 * 1024 // 32KB buffer
+	const limit = bufferSize * 1000
+	fmt.Printf("Duration set: %d seconds\n", durationInSeconds)
+
+	buffer := make([]byte, bufferSize)
+	var totalBytes int64
+
+	reader := infiniteReader{}
+	ratelimitedReader := NewRateLimitedReader(reader, limit) // large limit - no limit
+	deadline := time.Now().Add(durationInSeconds * time.Second)
+
+	for time.Now().Before(deadline) {
+		n, err := ratelimitedReader.Read(buffer)
+		if n > 0 {
+			totalBytes += int64(n)
+		}
+		if err != nil {
+			fmt.Printf("Read error: %v\n", err)
+			break
+		}
+	}
+
+	deviation := 0.8
+	if totalBytes < int64(limit*durationInSeconds*deviation) {
+		t.Fatalf("read incomplete data, read: %d expected: %d, with %.2f deviation: %d", totalBytes, limit*durationInSeconds, deviation, int64(limit*durationInSeconds*deviation))
+	}
+
+	mb := float64(totalBytes) / 1024.0 / 1024.0
+	fmt.Printf("MaxReadOverTimeSyntheticTest: Read %.4f MB in 10 seconds\n", mb)
+}
+
+type infiniteReader struct{}
+
+func (infiniteReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = 'A'
+	}
+	return len(p), nil
+}
+
 func read(t *testing.T, reader *RateLimitedReader, bufferSize, expectedDataSize int) int {
 	buffer := make([]byte, bufferSize)
 	n, err := reader.Read(buffer)
