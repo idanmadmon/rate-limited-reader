@@ -174,6 +174,19 @@ func TestRateLimitedReadCloser_Close(t *testing.T) {
 	}
 }
 
+func TestRateLimitedReader_LargeRead(t *testing.T) {
+	dataSize := 1 * 1024 * 1024 * 1024 // 1 GB of data
+	partsAmount := 4
+	reader := bytes.NewReader(make([]byte, dataSize))
+	limit := dataSize / partsAmount // dataSize/partsAmount bytes per second
+
+	ratelimitedReader := NewRateLimitedReader(reader, int64(limit))
+
+	start := time.Now()
+	read(t, ratelimitedReader, dataSize, dataSize)
+	assertReadTimes(t, time.Since(start), partsAmount, partsAmount+1)
+}
+
 func TestRateLimitedReader_ReadPerformence(t *testing.T) {
 	const durationInSeconds = 10
 	const bufferSize = 32 * 1024 // 32KB buffer
